@@ -6,17 +6,17 @@ const {
   updateProduct,
   deleteProduct
 } = require('../controllers/productController');
-
+const { protect} = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
 router.route('/')
   .get(getProducts)
-  .post(createProduct);
+  .post(protect,  createProduct);
 
 router.route('/:id')
   .get(getProduct)
-  .put( updateProduct)
-  .delete(  deleteProduct);
+  .put(protect, updateProduct)
+  .delete(protect,  deleteProduct);
 
 module.exports = router;

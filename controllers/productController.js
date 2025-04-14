@@ -1,8 +1,10 @@
-const Product = require('../models/Product');
+const Product = require('../models/Product')
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middlewares/async');
 
-
+// @desc    Get all products
+// @route   GET /api/products
+// @access  Public
 exports.getProducts = asyncHandler(async (req, res, next) => {
   // Filtering, sorting, pagination
   const pageSize = Number(req.query.pageSize) || 10;
@@ -31,7 +33,9 @@ exports.getProducts = asyncHandler(async (req, res, next) => {
   });
 });
 
-
+// @desc    Get single product
+// @route   GET /api/products/:id
+// @access  Public
 exports.getProduct = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
   
@@ -42,12 +46,18 @@ exports.getProduct = asyncHandler(async (req, res, next) => {
   res.json(product);
 });
 
+// @desc    Create new product
+// @route   POST /api/products
+// @access  Private/Admin
 exports.createProduct = asyncHandler(async (req, res, next) => {
   const product = await Product.create(req.body);
   
   res.status(201).json(product);
 });
 
+// @desc    Update product
+// @route   PUT /api/products/:id
+// @access  Private/Admin
 exports.updateProduct = asyncHandler(async (req, res, next) => {
   let product = await Product.findById(req.params.id);
   
@@ -63,6 +73,9 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
   res.json(product);
 });
 
+// @desc    Delete product
+// @route   DELETE /api/products/:id
+// @access  Private/Admin
 exports.deleteProduct = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
   
