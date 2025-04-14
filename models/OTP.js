@@ -9,11 +9,15 @@ const OTPSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  createdAt: {
+  expiresAt: {
     type: Date,
-    default: Date.now,
-    expires: 300 
+    required: true
   }
+}, {
+  timestamps: true
 });
 
+// Create an index that expires documents based on the expiresAt field
+
+OTPSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 module.exports = mongoose.model('OTP', OTPSchema);

@@ -40,6 +40,7 @@ exports.register = async (req, res, next) => {
       const lastAttempt = new Date(existingUser.lastOtpAttempt);
       const diffTime = Math.abs(now - lastAttempt);
       const diffHours = diffTime / (1000 * 60 * 60);
+      
 
       if (diffHours < 24) {
         return res.status(429).json({ 
@@ -62,12 +63,13 @@ exports.register = async (req, res, next) => {
 
     // Generate OTP
     const otp = generateOTP();
+    
 
     // Save OTP to DB
     await OTP.create({
       email,
       otp,
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 10 minutes
     });
 
     // Send OTP email
@@ -176,9 +178,11 @@ exports.verifyOTP = async (req, res, next) => {
 exports.resendOTP = async (req, res, next) => {
   try {
     const { email } = req.body;
+    const formattedEmail = email.toLowerCase();
 
     // Check if user exists
-    const user = await User.findOne({ email }).select('+otpAttempts +lastOtpAttempt');
+    const user = await User.findOne({ email: formattedEmail }).select('+otpAttempts +lastOtpAttempt');
+
     if (!user) {
       return res.status(404).json({ 
         success: false,
@@ -211,9 +215,10 @@ exports.resendOTP = async (req, res, next) => {
     await OTP.create({
       email,
       otp,
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
     });
-
+    
+    console.log('OTP saved to DB'); 
     // Send OTP email
     const emailText = `Your new verification OTP is: ${otp}\nThis OTP will expire in 5 minutes.`;
     const emailHtml = `
