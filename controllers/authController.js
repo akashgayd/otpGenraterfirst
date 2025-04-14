@@ -1,9 +1,13 @@
-const User = require('../models/User')
+const User = require('../models/User');
 const OTP = require('../models/OTP');
+const PasswordResetToken = require('../models/PasswordResetToken');
 const sendEmail = require('../config/mailer');
 const generateOTP = require('../utils/generateOTP');
+
 const jwt = require('jsonwebtoken');
 const validator = require('validator');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 // @desc    Register user
 // @route   POST /api/v1/auth/register
@@ -62,12 +66,23 @@ exports.register = async (req, res, next) => {
     // Save OTP to DB
     await OTP.create({
       email,
-      otp
+      otp,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
     });
 
     // Send OTP email
     const emailText = `Your verification OTP is: ${otp}\nThis OTP will expire in 5 minutes.`;
-    const emailSent = await sendEmail(email, 'Verify Your Email', emailText);
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Email Verification</h2>
+        <p>Your verification code is:</p>
+        <h3 style="background: #f4f4f4; padding: 10px; display: inline-block;">${otp}</h3>
+        <p>This code will expire in 5 minutes.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </div>
+    `;
+    
+    const emailSent = await sendEmail(email, 'Verify Your Email', emailText, emailHtml);
 
     if (!emailSent) {
       return res.status(500).json({ 
@@ -195,12 +210,23 @@ exports.resendOTP = async (req, res, next) => {
     // Save OTP to DB
     await OTP.create({
       email,
-      otp
+      otp,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
     });
 
     // Send OTP email
     const emailText = `Your new verification OTP is: ${otp}\nThis OTP will expire in 5 minutes.`;
-    const emailSent = await sendEmail(email, 'Verify Your Email', emailText);
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Email Verification</h2>
+        <p>Your new verification code is:</p>
+        <h3 style="background: #f4f4f4; padding: 10px; display: inline-block;">${otp}</h3>
+        <p>This code will expire in 5 minutes.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </div>
+    `;
+    
+    const emailSent = await sendEmail(email, 'Verify Your Email', emailText, emailHtml);
 
     if (!emailSent) {
       return res.status(500).json({ 
@@ -292,6 +318,130 @@ exports.logout = async (req, res, next) => {
       success: true,
       message: 'Logged out successfully'
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Forgot password
+// @route   POST /api/v1/auth/forgot-password
+// @access  Public
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+    // Save reset token to DB
+    await PasswordResetToken.create({
+      userId: user._id,
+      token: resetToken,
+      expiresAt: resetTokenExpires
+    });
+
+    // Create reset URL
+    const resetUrl = `${req.protocol}://${req.get('host')}/api/v1/auth/reset-password/${resetToken}`;
+
+    // Send email
+    const emailText = `You are receiving this email because you (or someone else) has requested a password reset. Please make a PUT request to: \n\n ${resetUrl}`;
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>You are receiving this email because you (or someone else) has requested a password reset.</p>
+        <p>Please click the link below to reset your password:</p>
+        <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Reset Password</a>
+        <p>This link will expire in 10 minutes.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </div>
+    `;
+    
+    const emailSent = await sendEmail(email, 'Password Reset Request', emailText, emailHtml);
+
+    if (!emailSent) {
+      return res.status(500).json({ 
+        success: false,
+        message: 'Email could not be sent'
+      });
+    }
+
+    res.status(200).json({ 
+      success: true,
+      message: 'Password reset email sent'
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Reset password
+// @route   PUT /api/v1/auth/reset-password/:token
+// @access  Public
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    // Find the reset token
+    const resetToken = await PasswordResetToken.findOne({ 
+      token,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    // Find user
+    const user = await User.findById(resetToken.userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    // Save user
+    await user.save();
+
+    // Delete the reset token
+    await PasswordResetToken.deleteOne({ _id: resetToken._id });
+
+    // Send confirmation email
+    const emailText = `Your password has been successfully reset. If you didn't make this change, please contact us immediately.`;
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Successful</h2>
+        <p>Your password has been successfully reset.</p>
+        <p>If you didn't make this change, please contact us immediately.</p>
+      </div>
+    `;
+    
+    await sendEmail(user.email, 'Password Reset Successful', emailText, emailHtml);
+
+    res.status(200).json({ 
+      success: true,
+      message: 'Password reset successful'
+    });
+
   } catch (err) {
     next(err);
   }
