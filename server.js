@@ -29,6 +29,25 @@ app.use('/api/v1/auth', require('./routes/authRoutes'));
 app.use('/api/v1/tasks', require('./routes/taskRoutes'));
 app.use('/api/categories', require('./routes/categoryRoutes'));
 
+const products = require('./routes/productRoutes');
+const cart = require('./routes/cartRoutes');
+const wishlist = require('./routes/wishlistRoutes');
+const orders = require('./routes/orderRoutes');
+const auth = require('./routes/authRoutes');
+
+
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
+
+
+
+app.use('/api/products', products);
+app.use('/api/cart', cart);
+app.use('/api/wishlist', wishlist);
+app.use('/api/orders', orders);
+app.use('/api/auth', auth);
+
 // Home route
 app.get('/', (req, res) => {
   res.json({
