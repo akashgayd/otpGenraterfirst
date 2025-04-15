@@ -89,7 +89,7 @@ exports.updateCartItem = asyncHandler(async (req, res, next) => {
   
   cart.items[itemIndex].quantity = quantity;
   await cart.save();
-  await cart.populate('items.product').execPopulate();
+  await cart.populate('items.product');
   
   res.json(cart);
 });
