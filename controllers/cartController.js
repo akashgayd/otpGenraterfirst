@@ -61,7 +61,7 @@ exports.addToCart = asyncHandler(async (req, res, next) => {
   }
   
   await cart.save();
-  await cart.populate('items.product').execPopulate();
+  await cart.populate('items.product');
   
   res.json(cart);
 });
@@ -111,7 +111,7 @@ exports.removeFromCart = asyncHandler(async (req, res, next) => {
   
   cart.items.splice(itemIndex, 1);
   await cart.save();
-  await cart.populate('items.product').execPopulate();
+  await cart.populate('items.product');
   
   res.json(cart);
 });
